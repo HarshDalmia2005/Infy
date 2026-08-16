@@ -11,7 +11,8 @@ import {
   Minus,
   ArrowUpRight,
   Type,
-  Eraser
+  Eraser,
+  StickyNote
 } from 'lucide-react';
 import { Tool } from '../engine/types';
 
@@ -28,6 +29,7 @@ export default function Toolbar() {
     { id: 'arrow', icon: <ArrowUpRight size={18} />, label: 'Arrow', shortcut: 'A' },
     { id: 'line', icon: <Minus size={18} />, label: 'Line', shortcut: 'L' },
     { id: 'text', icon: <Type size={18} />, label: 'Text', shortcut: 'T' },
+    { id: 'sticky', icon: <StickyNote size={18} />, label: 'Sticky Note', shortcut: 'S' },
     { id: 'eraser', icon: <Eraser size={18} />, label: 'Eraser', shortcut: 'Shift+E' },
   ];
 

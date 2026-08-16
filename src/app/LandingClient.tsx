@@ -115,8 +115,8 @@ export default function LandingClient({ createBoard, joinBoard }: Props) {
             />
             <button
               type="submit"
-              disabled={!boardId.trim()}
-              className="flex h-9 items-center gap-1.5 rounded-lg bg-white/[0.06] px-4 text-xs font-semibold text-white/60 transition-all hover:bg-white/[0.1] hover:text-white/90 disabled:opacity-30 disabled:cursor-not-allowed"
+              onClick={(e) => { if (!boardId.trim()) e.preventDefault(); }}
+              className={`flex h-9 items-center gap-1.5 rounded-lg px-4 text-xs font-semibold transition-all ${boardId.trim() ? 'bg-white/[0.06] text-white/60 hover:bg-white/[0.1] hover:text-white/90' : 'bg-white/[0.06] text-white/60 opacity-30 cursor-not-allowed'}`}
             >
               Join
             </button>

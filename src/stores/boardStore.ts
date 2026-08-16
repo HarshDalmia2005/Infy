@@ -8,6 +8,7 @@ interface BoardState {
   addElement: (element: CanvasElement) => void;
   updateElement: (id: string, element: Partial<CanvasElement>) => void;
   removeElement: (id: string) => void;
+  clearAll: () => void;
   setViewport: (viewport: Partial<Viewport> | ((prev: Viewport) => Viewport)) => void;
 }
 
@@ -22,7 +23,9 @@ export const useBoardStore = create<BoardState>((set) => ({
   removeElement: (id) => set((state) => ({
     elements: state.elements.filter(el => el.id !== id)
   })),
+  clearAll: () => set({ elements: [] }),
   setViewport: (vp) => set((state) => ({
     viewport: typeof vp === 'function' ? vp(state.viewport) : { ...state.viewport, ...vp }
   })),
 }));
+

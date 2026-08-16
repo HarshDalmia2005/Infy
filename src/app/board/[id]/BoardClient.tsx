@@ -5,6 +5,10 @@ import Toolbar from '../../../components/Toolbar';
 import ColorPicker from '../../../components/ColorPicker';
 import LiveCursors from '../../../components/LiveCursors';
 import UserPanel from '../../../components/UserPanel';
+import ChatDrawer from '../../../components/ChatDrawer';
+import ShareModal from '../../../components/ShareModal';
+import Minimap from '../../../components/Minimap';
+import ActionBar from '../../../components/ActionBar';
 import { useSocket } from '../../../hooks/useSocket';
 
 export default function BoardClient({ boardId }: { boardId: string }) {
@@ -15,8 +19,13 @@ export default function BoardClient({ boardId }: { boardId: string }) {
       <LiveCursors />
       <Canvas />
       <Toolbar />
+      <ActionBar />
       <ColorPicker />
+      <ShareModal boardId={boardId} />
+      <Minimap />
       <UserPanel />
+      <ChatDrawer />
     </div>
   );
 }
+

@@ -1,5 +1,6 @@
 import { CanvasElement, Viewport } from './types';
 import { ShapeEngine } from './ShapeEngine';
+import { SelectionEngine } from './SelectionEngine';
 
 export class RenderEngine {
   private canvas: HTMLCanvasElement;
@@ -18,12 +19,12 @@ export class RenderEngine {
     this.ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
   }
 
-  render(elements: CanvasElement[], viewport: Viewport, activeElement: CanvasElement | null) {
+  render(elements: CanvasElement[], viewport: Viewport, activeElement: CanvasElement | null, selectedId: string | null = null) {
     // Clear canvas (alpha: false means we fill with background)
     this.ctx.fillStyle = '#050508'; // var(--color-void)
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     
-    // Grid pattern (optional, can be done via CSS too, but better here for zooming)
+    // Grid pattern
     this.drawGrid(viewport);
     
     this.ctx.save();
@@ -36,6 +37,12 @@ export class RenderEngine {
       ShapeEngine.drawElement(this.ctx, element);
     }
     
+    // Draw selection highlight
+    if (selectedId) {
+      const sel = elements.find(el => el.id === selectedId);
+      if (sel) SelectionEngine.drawSelection(this.ctx, sel);
+    }
+    
     // Render active drawing element
     if (activeElement) {
       ShapeEngine.drawElement(this.ctx, activeElement);
@@ -46,26 +53,20 @@ export class RenderEngine {
 
   private drawGrid(viewport: Viewport) {
     this.ctx.save();
-    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
-    this.ctx.lineWidth = 1;
+    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
     
-    const gridSize = 60 * viewport.zoom;
+    const gridSize = 40 * viewport.zoom;
     const offsetX = viewport.x % gridSize;
     const offsetY = viewport.y % gridSize;
     
-    this.ctx.beginPath();
-    
     for (let x = offsetX; x < this.canvas.width / window.devicePixelRatio; x += gridSize) {
-      this.ctx.moveTo(x, 0);
-      this.ctx.lineTo(x, this.canvas.height / window.devicePixelRatio);
+      for (let y = offsetY; y < this.canvas.height / window.devicePixelRatio; y += gridSize) {
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, 1, 0, Math.PI * 2);
+        this.ctx.fill();
+      }
     }
     
-    for (let y = offsetY; y < this.canvas.height / window.devicePixelRatio; y += gridSize) {
-      this.ctx.moveTo(0, y);
-      this.ctx.lineTo(this.canvas.width / window.devicePixelRatio, y);
-    }
-    
-    this.ctx.stroke();
     this.ctx.restore();
   }
 }

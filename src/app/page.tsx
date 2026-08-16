@@ -10,8 +10,13 @@ export default function Home() {
 
   async function joinBoard(formData: FormData) {
     'use server';
-    const id = String(formData.get('boardId') ?? '').trim();
-    if (id) redirect(`/board/${id}`);
+    let id = String(formData.get('boardId') ?? '').trim();
+    if (id) {
+      if (id.includes('/board/')) {
+        id = id.split('/board/').pop() || id;
+      }
+      redirect(`/board/${id}`);
+    }
   }
 
   return <LandingClient createBoard={createBoard} joinBoard={joinBoard} />;

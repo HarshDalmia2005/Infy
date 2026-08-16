@@ -28,6 +28,7 @@ export function useKeyboard() {
         case 'a': setTool('arrow'); break;
         case 'l': setTool('line'); break;
         case 't': setTool('text'); break;
+        case 's': setTool('sticky'); break;
       }
     };
 

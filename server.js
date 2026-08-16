@@ -9,9 +9,8 @@ const port = parseInt(process.env.PORT || '3000', 10);
 const app = next({ dev, hostname, port });
 const handler = app.getRequestHandler();
 
-// Basic room manager
-const rooms = new Map(); // roomId -> { elements: [], users: {} }
-const socketToRoom = new Map(); // socketId -> roomId
+const rooms = new Map();
+const socketToRoom = new Map();
 
 const COLORS = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#06b6d4', '#3b82f6', '#6366f1', '#a855f7', '#ec4899'];
 const ANIMALS = ['Fox', 'Panda', 'Falcon', 'Tiger', 'Bear', 'Wolf', 'Hawk', 'Lion'];
@@ -24,35 +23,31 @@ app.prepare().then(() => {
   });
 
   io.on('connection', (socket) => {
-    console.log('User connected:', socket.id);
-
-    socket.on('join-room', (roomId) => {
+    socket.on('join-room', (roomId, profile) => {
       socket.join(roomId);
       socketToRoom.set(socket.id, roomId);
 
       if (!rooms.has(roomId)) {
-        rooms.set(roomId, { elements: [], users: {} });
+        rooms.set(roomId, { elements: [], users: {}, chat: [] });
       }
-      
+
       const room = rooms.get(roomId);
-      
-      // Create user profile
+
       const user = {
         id: socket.id,
-        name: `${COLORS[Math.floor(Math.random() * COLORS.length)]} ${ANIMALS[Math.floor(Math.random() * ANIMALS.length)]}`, // We'll simplify this by just passing name or generating on client, but let's do it here
-        color: COLORS[Math.floor(Math.random() * COLORS.length)],
+        name: profile?.name || `${COLORS[Math.floor(Math.random() * COLORS.length)]} ${ANIMALS[Math.floor(Math.random() * ANIMALS.length)]}`,
+        color: profile?.color || COLORS[Math.floor(Math.random() * COLORS.length)],
       };
-      
+
       room.users[socket.id] = user;
 
-      // Send current state to the new user
       socket.emit('room-state', {
         elements: room.elements,
         users: room.users,
-        me: user
+        chat: room.chat,
+        me: user,
       });
 
-      // Notify others
       socket.to(roomId).emit('user-joined', user);
     });
 
@@ -73,6 +68,24 @@ app.prepare().then(() => {
       }
     });
 
+    socket.on('element-update', (element) => {
+      const roomId = socketToRoom.get(socket.id);
+      if (roomId && rooms.has(roomId)) {
+        const room = rooms.get(roomId);
+        const idx = room.elements.findIndex(el => el.id === element.id);
+        if (idx !== -1) room.elements[idx] = element;
+        socket.to(roomId).emit('element-update', element);
+      }
+    });
+
+    socket.on('clear-all', () => {
+      const roomId = socketToRoom.get(socket.id);
+      if (roomId && rooms.has(roomId)) {
+        rooms.get(roomId).elements = [];
+        socket.to(roomId).emit('clear-all');
+      }
+    });
+
     socket.on('cursor-move', (cursor) => {
       const roomId = socketToRoom.get(socket.id);
       if (roomId) {
@@ -80,18 +93,21 @@ app.prepare().then(() => {
       }
     });
 
+    socket.on('chat-message', (msg) => {
+      const roomId = socketToRoom.get(socket.id);
+      if (roomId && rooms.has(roomId)) {
+        rooms.get(roomId).chat.push(msg);
+        socket.to(roomId).emit('chat-message', msg);
+      }
+    });
+
     socket.on('disconnect', () => {
-      console.log('User disconnected:', socket.id);
       const roomId = socketToRoom.get(socket.id);
       if (roomId && rooms.has(roomId)) {
         const room = rooms.get(roomId);
         delete room.users[socket.id];
         socket.to(roomId).emit('user-left', socket.id);
         socketToRoom.delete(socket.id);
-        
-        if (Object.keys(room.users).length === 0) {
-          // Keep board alive for 5 minutes when empty, then clear it (or we can just keep it in memory forever for this demo)
-        }
       }
     });
   });

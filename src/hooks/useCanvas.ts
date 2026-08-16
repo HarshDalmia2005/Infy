@@ -4,24 +4,43 @@ import { useToolStore } from '../stores/toolStore';
 import { useBoardStore } from '../stores/boardStore';
 import { useUserStore } from '../stores/userStore';
 import { CanvasElement, Point } from '../engine/types';
-import { historyManager, AddElementCommand } from '../engine/HistoryManager';
+import { historyManager, AddElementCommand, MoveElementCommand, ResizeElementCommand, UpdateTextCommand } from '../engine/HistoryManager';
+import { SelectionEngine, getResizeCursor, BBox } from '../engine/SelectionEngine';
 import { RenderEngine } from '../engine/RenderEngine';
 import { getSocket } from '../lib/socket';
 import { SOCKET_EVENTS } from '../socket/events';
 
+export type TextInputState = {
+  x: number; y: number;           // screen position
+  canvasX: number; canvasY: number;
+  type: 'text' | 'sticky';
+  screenW?: number; screenH?: number; // for edit mode overlay
+  existingId?: string;
+  initialText?: string;
+};
+
+type DragState = { elSnapshot: CanvasElement; startPt: Point };
+type ResizeState = { handleIdx: number; origBBox: BBox; elSnapshot: CanvasElement };
+
 export function useCanvas(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
   const [activeElement, setActiveElement] = useState<CanvasElement | null>(null);
-  
-  // Refs to avoid stale closures in event handlers
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [canvasCursor, setCanvasCursor] = useState<string>('crosshair');
+  const [textInput, setTextInput] = useState<TextInputState | null>(null);
+
   const activeElementRef = useRef<CanvasElement | null>(null);
+  const selectedIdRef = useRef<string | null>(null);
+  const isDraggingRef = useRef(false);
+  const isResizingRef = useRef(false);
+  const dragRef = useRef<DragState | null>(null);
+  const resizeRef = useRef<ResizeState | null>(null);
   const isDrawing = useRef(false);
   const isPanning = useRef(false);
   const lastPanPoint = useRef<Point | null>(null);
   const lastCursorEmit = useRef<number>(0);
   const renderEngine = useRef<RenderEngine | null>(null);
 
-  // Keep ref in sync with state
-  const setActiveElementSynced = (val: CanvasElement | null | ((prev: CanvasElement | null) => CanvasElement | null)) => {
+  const setActiveElementSynced = (val: CanvasElement | null | ((p: CanvasElement | null) => CanvasElement | null)) => {
     setActiveElement(prev => {
       const next = typeof val === 'function' ? val(prev) : val;
       activeElementRef.current = next;
@@ -29,52 +48,67 @@ export function useCanvas(canvasRef: React.RefObject<HTMLCanvasElement | null>) 
     });
   };
 
+  const setSelectedIdSynced = (id: string | null) => {
+    selectedIdRef.current = id;
+    setSelectedId(id);
+  };
+
   const { activeTool, style } = useToolStore();
   const { elements, viewport, setViewport } = useBoardStore();
 
-  // Keep viewport in a ref for use in event handlers without re-creating them
   const viewportRef = useRef(viewport);
   viewportRef.current = viewport;
-
   const activeToolRef = useRef(activeTool);
   activeToolRef.current = activeTool;
-
   const styleRef = useRef(style);
   styleRef.current = style;
-  
+  const elementsRef = useRef(elements);
+  elementsRef.current = elements;
+
   useEffect(() => {
     if (!canvasRef.current) return;
     renderEngine.current = new RenderEngine(canvasRef.current);
-    
-    const handleResize = () => {
-      if (canvasRef.current) {
-        renderEngine.current?.resize(window.innerWidth, window.innerHeight);
-      }
-    };
-    
+    const handleResize = () => renderEngine.current?.resize(window.innerWidth, window.innerHeight);
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   useEffect(() => {
-    let animationFrameId: number;
+    let id: number;
     const render = () => {
-      renderEngine.current?.render(elements, viewport, activeElementRef.current);
-      animationFrameId = requestAnimationFrame(render);
+      renderEngine.current?.render(elements, viewport, activeElementRef.current, selectedIdRef.current);
+      id = requestAnimationFrame(render);
     };
     render();
-    return () => cancelAnimationFrame(animationFrameId);
+    return () => cancelAnimationFrame(id);
   }, [elements, viewport]);
 
-  const getCanvasPoint = (e: React.PointerEvent | PointerEvent): Point => {
+  const getCanvasPoint = (e: React.PointerEvent | React.MouseEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
     const vp = viewportRef.current;
     return {
       x: (e.clientX - rect.left - vp.x) / vp.zoom,
       y: (e.clientY - rect.top - vp.y) / vp.zoom,
-      pressure: e.pressure,
     };
+  };
+
+  const openEdit = (el: CanvasElement) => {
+    const vp = viewportRef.current;
+    const bbox = SelectionEngine.getBBox(el);
+    const screenX = bbox.x * vp.zoom + vp.x;
+    const screenY = bbox.y * vp.zoom + vp.y;
+    const screenW = bbox.w * vp.zoom;
+    const screenH = bbox.h * vp.zoom;
+
+    setTextInput({
+      x: screenX, y: screenY,
+      canvasX: bbox.x, canvasY: bbox.y,
+      type: el.type as 'text' | 'sticky',
+      screenW, screenH,
+      existingId: el.id,
+      initialText: el.text || '',
+    });
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
@@ -83,22 +117,67 @@ export function useCanvas(canvasRef: React.RefObject<HTMLCanvasElement | null>) 
       lastPanPoint.current = { x: e.clientX, y: e.clientY };
       return;
     }
-
     if (e.button !== 0) return;
 
+    const pt = getCanvasPoint(e);
+
+    if (activeToolRef.current === 'select') {
+      const selId = selectedIdRef.current;
+      const selEl = selId ? elementsRef.current.find(el => el.id === selId) : null;
+
+      if (selEl) {
+        const hi = SelectionEngine.getHandleAt(selEl, pt.x, pt.y, viewportRef.current.zoom);
+        if (hi !== -1) {
+          isResizingRef.current = true;
+          resizeRef.current = {
+            handleIdx: hi,
+            origBBox: SelectionEngine.getBBox(selEl),
+            elSnapshot: { ...selEl, points: selEl.points.map(p => ({ ...p })) },
+          };
+          (e.target as HTMLElement).setPointerCapture(e.pointerId);
+          return;
+        }
+      }
+
+      const hit = SelectionEngine.getElementAt(elementsRef.current, pt.x, pt.y);
+      if (hit) {
+        setSelectedIdSynced(hit.id);
+        isDraggingRef.current = true;
+        dragRef.current = { elSnapshot: { ...hit, points: hit.points.map(p => ({ ...p })) }, startPt: pt };
+      } else {
+        setSelectedIdSynced(null);
+      }
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      return;
+    }
+
+    if (activeToolRef.current === 'text' || activeToolRef.current === 'sticky') {
+      e.preventDefault();
+      setSelectedIdSynced(null);
+      setTextInput({ x: e.clientX, y: e.clientY, canvasX: pt.x, canvasY: pt.y, type: activeToolRef.current as 'text' | 'sticky' });
+      return;
+    }
+
     isDrawing.current = true;
-    const point = getCanvasPoint(e);
-    
+    setSelectedIdSynced(null);
     setActiveElementSynced({
       id: uuidv4(),
       type: activeToolRef.current,
-      points: [point],
+      points: [pt],
       style: { ...styleRef.current },
       userId: useUserStore.getState().me?.id || 'local',
       timestamp: Date.now(),
     });
-    
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const onDoubleClick = (e: React.MouseEvent) => {
+    if (activeToolRef.current !== 'select') return;
+    const pt = getCanvasPoint(e);
+    const hit = SelectionEngine.getElementAt(elementsRef.current, pt.x, pt.y);
+    if (hit && (hit.type === 'sticky' || hit.type === 'text')) {
+      openEdit(hit);
+    }
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
@@ -110,21 +189,42 @@ export function useCanvas(canvasRef: React.RefObject<HTMLCanvasElement | null>) 
       return;
     }
 
-    const point = getCanvasPoint(e);
-    
-    // Emit cursor movement (throttled to ~30fps)
+    const pt = getCanvasPoint(e);
+
+    if (activeToolRef.current === 'select' && !isDraggingRef.current && !isResizingRef.current) {
+      const selId = selectedIdRef.current;
+      const selEl = selId ? elementsRef.current.find(el => el.id === selId) : null;
+      if (selEl) {
+        const hi = SelectionEngine.getHandleAt(selEl, pt.x, pt.y, viewportRef.current.zoom);
+        setCanvasCursor(hi !== -1 ? getResizeCursor(hi) : (SelectionEngine.hitTest(selEl, pt.x, pt.y) ? 'move' : 'default'));
+      } else {
+        setCanvasCursor(SelectionEngine.getElementAt(elementsRef.current, pt.x, pt.y) ? 'move' : 'default');
+      }
+    }
+
     const now = Date.now();
     if (now - lastCursorEmit.current > 30) {
-      getSocket().emit(SOCKET_EVENTS.CURSOR_MOVE, { x: point.x, y: point.y });
+      getSocket().emit(SOCKET_EVENTS.CURSOR_MOVE, { x: pt.x, y: pt.y });
       lastCursorEmit.current = now;
     }
 
-    if (!isDrawing.current || !activeElementRef.current) return;
+    if (isResizingRef.current && resizeRef.current) {
+      const r = resizeRef.current;
+      const resized = SelectionEngine.resizeElement(r.elSnapshot, r.handleIdx, r.origBBox, pt);
+      useBoardStore.getState().updateElement(resized.id, resized);
+      return;
+    }
 
-    setActiveElementSynced(prev => {
-      if (!prev) return null;
-      return { ...prev, points: [...prev.points, point] };
-    });
+    if (isDraggingRef.current && dragRef.current) {
+      const dx = pt.x - dragRef.current.startPt.x;
+      const dy = pt.y - dragRef.current.startPt.y;
+      const moved = SelectionEngine.translateElement(dragRef.current.elSnapshot, dx, dy);
+      useBoardStore.getState().updateElement(moved.id, { points: moved.points });
+      return;
+    }
+
+    if (!isDrawing.current || !activeElementRef.current) return;
+    setActiveElementSynced(prev => prev ? { ...prev, points: [...prev.points, pt] } : null);
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
@@ -134,17 +234,44 @@ export function useCanvas(canvasRef: React.RefObject<HTMLCanvasElement | null>) 
       return;
     }
 
+    const pt = getCanvasPoint(e);
+
+    if (isResizingRef.current && resizeRef.current) {
+      isResizingRef.current = false;
+      const r = resizeRef.current;
+      const afterEl = SelectionEngine.resizeElement(r.elSnapshot, r.handleIdx, r.origBBox, pt);
+      const cmd = new ResizeElementCommand(r.elSnapshot, afterEl);
+      cmd.execute();
+      historyManager['undoStack'].push(cmd);
+      historyManager['redoStack'] = [];
+      resizeRef.current = null;
+      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+      return;
+    }
+
+    if (isDraggingRef.current && dragRef.current) {
+      isDraggingRef.current = false;
+      const dx = pt.x - dragRef.current.startPt.x;
+      const dy = pt.y - dragRef.current.startPt.y;
+      if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+        const afterEl = SelectionEngine.translateElement(dragRef.current.elSnapshot, dx, dy);
+        const cmd = new MoveElementCommand(dragRef.current.elSnapshot, afterEl);
+        cmd.execute();
+        historyManager['undoStack'].push(cmd);
+        historyManager['redoStack'] = [];
+      }
+      dragRef.current = null;
+      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+      return;
+    }
+
     if (!isDrawing.current) return;
     isDrawing.current = false;
 
-    // Read from ref — avoids stale closure from state
     const el = activeElementRef.current;
-    
     if (el && (el.points.length > 1 || el.type === 'pen')) {
-      const command = new AddElementCommand(el);
-      historyManager.execute(command);
+      historyManager.execute(new AddElementCommand(el));
     }
-
     setActiveElementSynced(null);
     (e.target as HTMLElement).releasePointerCapture(e.pointerId);
   };
@@ -152,31 +279,42 @@ export function useCanvas(canvasRef: React.RefObject<HTMLCanvasElement | null>) 
   const onWheel = (e: React.WheelEvent) => {
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
-      const zoomFactor = 1 - e.deltaY * 0.01;
       const vp = viewportRef.current;
-      const newZoom = Math.min(Math.max(vp.zoom * zoomFactor, 0.1), 5);
-      
+      const newZoom = Math.min(Math.max(vp.zoom * (1 - e.deltaY * 0.01), 0.1), 5);
       const rect = canvasRef.current!.getBoundingClientRect();
-      const pointerX = e.clientX - rect.left;
-      const pointerY = e.clientY - rect.top;
-      
-      const newX = pointerX - (pointerX - vp.x) * (newZoom / vp.zoom);
-      const newY = pointerY - (pointerY - vp.y) * (newZoom / vp.zoom);
-      
-      setViewport({ x: newX, y: newY, zoom: newZoom });
+      const px = e.clientX - rect.left, py = e.clientY - rect.top;
+      setViewport({ x: px - (px - vp.x) * (newZoom / vp.zoom), y: py - (py - vp.y) * (newZoom / vp.zoom), zoom: newZoom });
     } else {
-      setViewport(prev => ({
-        ...prev,
-        x: prev.x - e.deltaX,
-        y: prev.y - e.deltaY
-      }));
+      setViewport(prev => ({ ...prev, x: prev.x - e.deltaX, y: prev.y - e.deltaY }));
+    }
+  };
+
+  const commitText = (text: string, input: TextInputState) => {
+    const trimmed = text.trim();
+    if (input.existingId) {
+      if (!trimmed) return;
+      const el = elementsRef.current.find(e => e.id === input.existingId);
+      if (el && trimmed !== el.text) {
+        historyManager.execute(new UpdateTextCommand(el, trimmed));
+      }
+    } else {
+      if (!trimmed) return;
+      const el: CanvasElement = {
+        id: uuidv4(),
+        type: input.type,
+        points: [{ x: input.canvasX, y: input.canvasY }],
+        style: { ...styleRef.current },
+        text: trimmed,
+        userId: useUserStore.getState().me?.id || 'local',
+        timestamp: Date.now(),
+      };
+      historyManager.execute(new AddElementCommand(el));
     }
   };
 
   return {
-    onPointerDown,
-    onPointerMove,
-    onPointerUp,
-    onWheel,
+    onPointerDown, onPointerMove, onPointerUp, onDoubleClick, onWheel,
+    textInput, setTextInput, commitText,
+    selectedId, canvasCursor,
   };
 }

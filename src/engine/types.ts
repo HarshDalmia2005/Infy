@@ -1,4 +1,4 @@
-export type Tool = 'pen' | 'line' | 'rect' | 'ellipse' | 'arrow' | 'text' | 'eraser' | 'select' | 'pan';
+export type Tool = 'pen' | 'line' | 'rect' | 'ellipse' | 'arrow' | 'text' | 'sticky' | 'eraser' | 'select' | 'pan';
 
 export interface Point {
   x: number;
@@ -11,6 +11,8 @@ export interface ElementStyle {
   width: number;
   fill?: string;
   opacity: number;
+  fontSize?: number;
+  fontFamily?: string;
 }
 
 export interface CanvasElement {
@@ -21,6 +23,7 @@ export interface CanvasElement {
   userId: string;
   timestamp: number;
   text?: string;
+  bounds?: { w: number; h: number }; // explicit size for sticky/text
   isSelected?: boolean;
 }
 
