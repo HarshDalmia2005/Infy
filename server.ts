@@ -34,9 +34,9 @@ async function loadRoomState(roomId: string) {
     if (board && board.data) {
       const parsed = typeof board.data === 'string' ? JSON.parse(board.data) : board.data;
       if (Array.isArray(parsed)) {
-        return { elements: parsed, chat: [] };
+        return { elements: parsed, chat: [], title: board.name || 'Untitled Board' };
       }
-      return { elements: parsed.elements || [], chat: parsed.chat || [] };
+      return { elements: parsed.elements || [], chat: parsed.chat || [], title: board.name || 'Untitled Board' };
     }
   } catch (err) {
     console.error(`Failed to load room ${roomId} from DB:`, err);
@@ -90,7 +90,8 @@ app.prepare().then(async () => {
         rooms.set(roomId, {
           elements: savedState?.elements || [],
           users: {},
-          chat: savedState?.chat || []
+          chat: savedState?.chat || [],
+          title: savedState?.title || 'Untitled Board',
         });
       }
 
@@ -110,6 +111,7 @@ app.prepare().then(async () => {
         elements: room.elements,
         users: room.users,
         chat: room.chat,
+        title: room.title,
         me: user,
       });
 
@@ -168,6 +170,25 @@ app.prepare().then(async () => {
         rooms.get(roomId).chat.push(msg);
         markRoomDirty(roomId); // Note: we only save elements to DB right now, but we'll mark dirty anyway
         socket.to(roomId).emit('chat-message', msg);
+      }
+    });
+
+    socket.on('board-title-update', async (title: string) => {
+      const roomId = socketToRoom.get(socket.id);
+      if (roomId && rooms.has(roomId)) {
+        const room = rooms.get(roomId);
+        room.title = title;
+        // Persist to DB immediately
+        try {
+          await prisma.board.update({
+            where: { id: roomId },
+            data: { name: title },
+          });
+        } catch (err) {
+          console.error(`Failed to update title for room ${roomId}:`, err);
+        }
+        // Broadcast to all other users in the room
+        socket.to(roomId).emit('board-title-update', title);
       }
     });
 

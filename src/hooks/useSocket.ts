@@ -20,8 +20,9 @@ export function useSocket(roomId: string) {
 
     const socket = getSocket();
 
-    const handleRoomState = (state: { elements: CanvasElement[]; users: Record<string, User>; chat: unknown[]; me: User }) => {
+    const handleRoomState = (state: { elements: CanvasElement[]; users: Record<string, User>; chat: unknown[]; me: User; title?: string }) => {
       useBoardStore.getState().setElements(state.elements);
+      useBoardStore.getState().setBoardTitle(state.title || 'Untitled Board');
       useUserStore.getState().setUsers(state.users);
       useUserStore.getState().setMe(state.me);
 
@@ -39,6 +40,9 @@ export function useSocket(roomId: string) {
     const handleCursorMove = ({ userId, cursor }: { userId: string; cursor: { x: number; y: number } }) => {
       useUserStore.getState().updateUserCursor(userId, cursor);
     };
+    const handleBoardTitleUpdate = (title: string) => {
+      useBoardStore.getState().setBoardTitle(title);
+    };
 
     // Register all listeners first
     socket.on(SOCKET_EVENTS.ROOM_STATE, handleRoomState);
@@ -49,6 +53,7 @@ export function useSocket(roomId: string) {
     socket.on(SOCKET_EVENTS.ELEMENT_UPDATE, handleElementUpdate);
     socket.on('clear-all', handleClearAll);
     socket.on(SOCKET_EVENTS.CURSOR_MOVE, handleCursorMove);
+    socket.on(SOCKET_EVENTS.BOARD_TITLE_UPDATE, handleBoardTitleUpdate);
 
     const joinRoom = () => {
       console.log('[socket] connected, joining room', roomIdRef.current);
@@ -99,6 +104,7 @@ export function useSocket(roomId: string) {
       socket.off(SOCKET_EVENTS.ELEMENT_UPDATE, handleElementUpdate);
       socket.off('clear-all', handleClearAll);
       socket.off(SOCKET_EVENTS.CURSOR_MOVE, handleCursorMove);
+      socket.off(SOCKET_EVENTS.BOARD_TITLE_UPDATE, handleBoardTitleUpdate);
       socket.disconnect();
     };
   }, [roomId, session, status]);

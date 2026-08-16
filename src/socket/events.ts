@@ -16,4 +16,7 @@ export const SOCKET_EVENTS = {
   
   // Chat
   CHAT_MESSAGE: 'chat-message',
+
+  // Board title
+  BOARD_TITLE_UPDATE: 'board-title-update',
 } as const;
