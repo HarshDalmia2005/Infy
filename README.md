@@ -2,7 +2,13 @@
 
 A real-time collaborative whiteboard built with **Next.js 16**, **Socket.io**, and the **HTML5 Canvas API**. Multiple users can draw, annotate, and brainstorm together on an infinite canvas — with live cursors, instant sync, and a full suite of drawing tools.
 
-![InfyBoard](https://img.shields.io/badge/Next.js-16-black?logo=next.js) ![Socket.io](https://img.shields.io/badge/Socket.io-4.8-white?logo=socket.io) ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript) ![Zustand](https://img.shields.io/badge/Zustand-5-orange)
+![InfyBoard](https://img.shields.io/badge/Next.js-16-black?logo=next.js) ![Socket.io](https://img.shields.io/badge/Socket.io-4.8-white?logo=socket.io) ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript) ![Zustand](https://img.shields.io/badge/Zustand-5-orange) [![Live Demo](https://img.shields.io/badge/Live%20Demo-infy09.duckdns.org-brightgreen)](https://infy09.duckdns.org)
+
+---
+
+## 🌐 Live Demo
+
+**[https://infy09.duckdns.org](https://infy09.duckdns.org)**
 
 ---
 
@@ -164,6 +170,31 @@ npm start
 6. **Add text** — press `T`, click to place, choose font size and family from the bottom toolbar, then type. Press Enter to commit.
 7. **Undo / Redo** — use the top action bar or Ctrl+Z / Ctrl+Shift+Z.
 8. **Chat** — click the message bubble (bottom-right) to open the team chat.
+
+---
+
+## Deployment
+
+The app is deployed on an Ubuntu server using:
+
+- **Nginx** as a reverse proxy (port 80/443 → localhost:3000)
+- **Let's Encrypt** SSL certificate via Certbot (auto-renewing)
+- **Docker + Docker Compose** for containerized PostgreSQL
+
+To deploy on your own server:
+
+```bash
+# Clone and install
+git clone https://github.com/HarshDalmia2005/Infy.git
+cd Infy
+npm install
+npm run build
+
+# Start with PM2 or similar process manager
+npm start
+```
+
+Then point Nginx to `localhost:3000` and run `certbot --nginx` for HTTPS.
 
 ---
 
