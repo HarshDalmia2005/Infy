@@ -32,9 +32,25 @@ export class RenderEngine {
     this.ctx.translate(viewport.x, viewport.y);
     this.ctx.scale(viewport.zoom, viewport.zoom);
     
-    // Render all elements
+    // Calculate visible viewport in canvas space
+    const invZoom = 1 / viewport.zoom;
+    const viewX = -viewport.x * invZoom;
+    const viewY = -viewport.y * invZoom;
+    const viewW = this.canvas.width * invZoom / window.devicePixelRatio;
+    const viewH = this.canvas.height * invZoom / window.devicePixelRatio;
+    
+    // Render all visible elements
     for (const element of elements) {
-      ShapeEngine.drawElement(this.ctx, element);
+      const bbox = SelectionEngine.getBBox(element);
+      // Fast AABB intersection check
+      if (
+        bbox.x < viewX + viewW &&
+        bbox.x + bbox.w > viewX &&
+        bbox.y < viewY + viewH &&
+        bbox.y + bbox.h > viewY
+      ) {
+        ShapeEngine.drawElement(this.ctx, element);
+      }
     }
     
     // Draw selection highlight

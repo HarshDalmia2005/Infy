@@ -9,6 +9,7 @@ import ChatDrawer from '../../../components/ChatDrawer';
 import ShareModal from '../../../components/ShareModal';
 import Minimap from '../../../components/Minimap';
 import ActionBar from '../../../components/ActionBar';
+import ExportMenu from '../../../components/ExportMenu';
 import { useSocket } from '../../../hooks/useSocket';
 
 export default function BoardClient({ boardId }: { boardId: string }) {
@@ -22,6 +23,7 @@ export default function BoardClient({ boardId }: { boardId: string }) {
       <ActionBar />
       <ColorPicker />
       <ShareModal boardId={boardId} />
+      <ExportMenu />
       <Minimap />
       <UserPanel />
       <ChatDrawer />

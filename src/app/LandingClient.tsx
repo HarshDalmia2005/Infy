@@ -123,6 +123,15 @@ export default function LandingClient({ createBoard, joinBoard }: Props) {
           </form>
         </div>
 
+        {/* ── Tech Stack ── */}
+        <div className="mt-16 flex flex-wrap items-center justify-center gap-3">
+          {['Next.js 14', 'Socket.io', 'HTML5 Canvas', 'TypeScript', 'Zustand', 'Tailwind CSS'].map((tech) => (
+            <div key={tech} className="rounded-full border border-white/[0.06] bg-white/[0.02] px-3 py-1 text-xs text-white/50">
+              {tech}
+            </div>
+          ))}
+        </div>
+
         {/* ── Feature grid ── */}
         <div className="mt-28 grid grid-cols-1 gap-px sm:grid-cols-2 lg:grid-cols-3 rounded-2xl overflow-hidden border border-white/[0.06]">
           {[
