@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Share2, Copy, Check } from 'lucide-react';
 
-export default function ShareModal({ boardId }: { boardId: string }) {
+export default function ShareModal() {
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 

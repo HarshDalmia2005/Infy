@@ -22,7 +22,7 @@ export default function BoardClient({ boardId }: { boardId: string }) {
       <Toolbar />
       <ActionBar />
       <ColorPicker />
-      <ShareModal boardId={boardId} />
+      <ShareModal />
       <ExportMenu />
       <Minimap />
       <UserPanel />

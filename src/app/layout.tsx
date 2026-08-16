@@ -14,6 +14,8 @@ export const metadata: Metadata = {
     'Infinite canvas. Real-time collaboration. Built for teams who think visually.',
 };
 
+import { Providers } from '../components/Providers';
+
 export default function RootLayout({
   children,
 }: {
@@ -21,7 +23,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={inter.variable}>
-      <body className="font-sans antialiased">{children}</body>
+      <body className="font-sans antialiased">
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

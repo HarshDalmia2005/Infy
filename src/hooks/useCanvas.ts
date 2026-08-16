@@ -23,7 +23,7 @@ type DragState = { elSnapshot: CanvasElement; startPt: Point };
 type ResizeState = { handleIdx: number; origBBox: BBox; elSnapshot: CanvasElement };
 
 export function useCanvas(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
-  const [activeElement, setActiveElement] = useState<CanvasElement | null>(null);
+  const [, setActiveElement] = useState<CanvasElement | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [canvasCursor, setCanvasCursor] = useState<string>('crosshair');
   const [textInput, setTextInput] = useState<TextInputState | null>(null);
@@ -57,13 +57,16 @@ export function useCanvas(canvasRef: React.RefObject<HTMLCanvasElement | null>) 
   const { elements, viewport, setViewport } = useBoardStore();
 
   const viewportRef = useRef(viewport);
-  viewportRef.current = viewport;
   const activeToolRef = useRef(activeTool);
-  activeToolRef.current = activeTool;
   const styleRef = useRef(style);
-  styleRef.current = style;
   const elementsRef = useRef(elements);
-  elementsRef.current = elements;
+
+  useEffect(() => {
+    viewportRef.current = viewport;
+    activeToolRef.current = activeTool;
+    styleRef.current = style;
+    elementsRef.current = elements;
+  }, [viewport, activeTool, style, elements]);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -72,7 +75,7 @@ export function useCanvas(canvasRef: React.RefObject<HTMLCanvasElement | null>) 
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [canvasRef]);
 
   useEffect(() => {
     let id: number;

@@ -35,7 +35,7 @@ export default function ChatDrawer() {
     };
     
     // Also need to receive chat history when joining a room
-    const handleRoomState = (state: any) => {
+    const handleRoomState = (state: { chat: ChatMessage[] }) => {
       if (state.chat) setMessages(state.chat);
     };
     
@@ -50,7 +50,6 @@ export default function ChatDrawer() {
 
   useEffect(() => {
     if (isOpen) {
-      setUnreadCount(0);
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [isOpen, messages]);
@@ -76,7 +75,7 @@ export default function ChatDrawer() {
   return (
     <>
       <button 
-        onClick={() => setIsOpen(true)}
+        onClick={() => { setIsOpen(true); setUnreadCount(0); }}
         className={`absolute bottom-6 right-6 z-10 glass-heavy rounded-full p-4 flex items-center justify-center transition-all shadow-xl hover:shadow-2xl border border-white/5 ${isOpen ? 'scale-0 opacity-0' : 'scale-100 opacity-100 text-white/80 hover:text-white'}`}
       >
         <MessageSquare size={24} />

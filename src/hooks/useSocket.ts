@@ -2,28 +2,31 @@ import { useEffect, useRef } from 'react';
 import { getSocket } from '../lib/socket';
 import { SOCKET_EVENTS } from '../socket/events';
 import { useBoardStore } from '../stores/boardStore';
-import { useUserStore } from '../stores/userStore';
+import { useUserStore, User } from '../stores/userStore';
 import { CanvasElement } from '../engine/types';
 
 export function useSocket(roomId: string) {
   // Use refs to avoid stale closures and prevent effect from re-running
   const roomIdRef = useRef(roomId);
-  roomIdRef.current = roomId;
+
+  useEffect(() => {
+    roomIdRef.current = roomId;
+  }, [roomId]);
 
   useEffect(() => {
     const socket = getSocket();
 
-    const handleRoomState = (state: { elements: CanvasElement[]; users: any; chat: any; me: any }) => {
+    const handleRoomState = (state: { elements: CanvasElement[]; users: Record<string, User>; chat: unknown[]; me: User }) => {
       useBoardStore.getState().setElements(state.elements);
       useUserStore.getState().setUsers(state.users);
       useUserStore.getState().setMe(state.me);
-      
+
       try {
         localStorage.setItem('infy-user-profile', JSON.stringify({ name: state.me.name, color: state.me.color }));
-      } catch(e) {}
+      } catch { /* ignore */ }
     };
 
-    const handleUserJoined = (user: any) => useUserStore.getState().addUser(user);
+    const handleUserJoined = (user: User) => useUserStore.getState().addUser(user);
     const handleUserLeft = (userId: string) => useUserStore.getState().removeUser(userId);
     const handleElementAdd = (element: CanvasElement) => useBoardStore.getState().addElement(element);
     const handleElementRemove = (elementId: string) => useBoardStore.getState().removeElement(elementId);
@@ -45,13 +48,13 @@ export function useSocket(roomId: string) {
 
     const joinRoom = () => {
       console.log('[socket] connected, joining room', roomIdRef.current);
-      
+
       let profile = null;
       try {
         const saved = localStorage.getItem('infy-user-profile');
         if (saved) profile = JSON.parse(saved);
-      } catch(e) {}
-      
+      } catch { /* ignore */ }
+
       socket.emit(SOCKET_EVENTS.JOIN_ROOM, roomIdRef.current, profile);
     };
 

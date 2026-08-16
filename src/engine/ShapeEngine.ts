@@ -1,4 +1,4 @@
-import { CanvasElement, Point } from './types';
+import { CanvasElement, Point, ElementStyle } from './types';
 import { STICKY_W, STICKY_H } from './SelectionEngine';
 
 export class ShapeEngine {
@@ -96,7 +96,7 @@ export class ShapeEngine {
     ctx.stroke();
   }
 
-  private static drawText(ctx: CanvasRenderingContext2D, start: Point, text: string, style: any) {
+  private static drawText(ctx: CanvasRenderingContext2D, start: Point, text: string, style: ElementStyle) {
     const fontSize = style.fontSize ?? 16;
     const fontFamily = style.fontFamily ?? 'Inter, system-ui, sans-serif';
     ctx.font = `${fontSize}px ${fontFamily}`;
@@ -144,7 +144,7 @@ export class ShapeEngine {
     return map[color] ?? { bg: '#fef9c3', header: '#fef08a', text: '#1a1700' };
   }
 
-  private static drawSticky(ctx: CanvasRenderingContext2D, start: Point, text: string, style: any, bounds?: { w: number; h: number }) {
+  private static drawSticky(ctx: CanvasRenderingContext2D, start: Point, text: string, style: ElementStyle, bounds?: { w: number; h: number }) {
     const W = bounds?.w ?? STICKY_W;
     const H = bounds?.h ?? STICKY_H;
     const theme = this.getStickyTheme(style.color);

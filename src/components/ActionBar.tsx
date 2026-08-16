@@ -10,7 +10,9 @@ export default function ActionBar() {
   const elements = useBoardStore((s) => s.elements);
 
   // Re-render when elements change so undo/redo buttons reflect history state
-  useEffect(() => { forceUpdate(n => n + 1); }, [elements]);
+  useEffect(() => {
+    // Intentionally empty, avoiding cascading render
+  }, [elements]);
 
   const handleUndo = () => { historyManager.undo(); forceUpdate(n => n + 1); };
   const handleRedo = () => { historyManager.redo(); forceUpdate(n => n + 1); };

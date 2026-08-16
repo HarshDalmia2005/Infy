@@ -1,9 +1,13 @@
 import { createServer } from 'node:http';
 import next from 'next';
 import { Server } from 'socket.io';
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { PrismaClient } from './src/generated/prisma/client.js';
+import { PrismaPg } from '@prisma/adapter-pg';
+import pkg from 'pg';
+import dotenv from 'dotenv';
+dotenv.config();
+
+const { Pool } = pkg;
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = 'localhost';
@@ -12,33 +16,32 @@ const port = parseInt(process.env.PORT || '3000', 10);
 const app = next({ dev, hostname, port });
 const handler = app.getRequestHandler();
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const BOARDS_DIR = path.join(process.cwd(), '.boards');
-
-// Ensure boards directory exists
-async function ensureBoardsDir() {
-  try {
-    await fs.access(BOARDS_DIR);
-  } catch {
-    await fs.mkdir(BOARDS_DIR, { recursive: true });
-  }
-}
-
-const rooms = new Map();
-const socketToRoom = new Map();
-const roomDirtyFlags = new Map(); // Track which rooms need saving
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
+const rooms = new Map<string, any>();
+const socketToRoom = new Map<string, string>();
+const roomDirtyFlags = new Map<string, boolean>(); // Track which rooms need saving
 
 const COLORS = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#06b6d4', '#3b82f6', '#6366f1', '#a855f7', '#ec4899'];
 const ANIMALS = ['Fox', 'Panda', 'Falcon', 'Tiger', 'Bear', 'Wolf', 'Hawk', 'Lion'];
 
-async function loadRoomState(roomId) {
-  const filePath = path.join(BOARDS_DIR, `${roomId}.json`);
+async function loadRoomState(roomId: string) {
   try {
-    const data = await fs.readFile(filePath, 'utf-8');
-    return JSON.parse(data);
+    const board = await prisma.board.findUnique({
+      where: { id: roomId }
+    });
+    if (board && board.data) {
+      const parsed = typeof board.data === 'string' ? JSON.parse(board.data) : board.data;
+      if (Array.isArray(parsed)) {
+        return { elements: parsed, chat: [] };
+      }
+      return { elements: parsed.elements || [], chat: parsed.chat || [] };
+    }
   } catch (err) {
-    return null; // File does not exist or invalid JSON
+    console.error(`Failed to load room ${roomId} from DB:`, err);
   }
+  return null;
 }
 
 async function saveDirtyRooms() {
@@ -46,27 +49,28 @@ async function saveDirtyRooms() {
     if (isDirty) {
       const room = rooms.get(roomId);
       if (room) {
-        const filePath = path.join(BOARDS_DIR, `${roomId}.json`);
         try {
-          // We only save elements and chat, not active users
-          const saveData = { elements: room.elements, chat: room.chat };
-          await fs.writeFile(filePath, JSON.stringify(saveData, null, 2));
-          roomDirtyFlags.set(roomId, false);
+          const existing = await prisma.board.findUnique({ where: { id: roomId }});
+          if (existing) {
+            await prisma.board.update({
+              where: { id: roomId },
+              data: { data: JSON.stringify({ elements: room.elements, chat: room.chat }) }
+            });
+            roomDirtyFlags.set(roomId, false);
+          }
         } catch (err) {
-          console.error(`Failed to save room ${roomId}:`, err);
+          console.error(`Failed to save room ${roomId} to DB:`, err);
         }
       }
     }
   }
 }
 
-function markRoomDirty(roomId) {
+function markRoomDirty(roomId: string) {
   roomDirtyFlags.set(roomId, true);
 }
 
 app.prepare().then(async () => {
-  await ensureBoardsDir();
-
   // Auto-save every 10 seconds
   setInterval(saveDirtyRooms, 10000);
 
@@ -76,12 +80,12 @@ app.prepare().then(async () => {
   });
 
   io.on('connection', (socket) => {
-    socket.on('join-room', async (roomId, profile) => {
+    socket.on('join-room', async (roomId: string, profile: any) => {
       socket.join(roomId);
       socketToRoom.set(socket.id, roomId);
 
       if (!rooms.has(roomId)) {
-        // Try to load from disk
+        // Try to load from DB
         const savedState = await loadRoomState(roomId);
         rooms.set(roomId, {
           elements: savedState?.elements || [],
@@ -110,7 +114,7 @@ app.prepare().then(async () => {
       socket.to(roomId).emit('user-joined', user);
     });
 
-    socket.on('element-add', (element) => {
+    socket.on('element-add', (element: any) => {
       const roomId = socketToRoom.get(socket.id);
       if (roomId && rooms.has(roomId)) {
         rooms.get(roomId).elements.push(element);
@@ -119,21 +123,21 @@ app.prepare().then(async () => {
       }
     });
 
-    socket.on('element-remove', (elementId) => {
+    socket.on('element-remove', (elementId: string) => {
       const roomId = socketToRoom.get(socket.id);
       if (roomId && rooms.has(roomId)) {
         const room = rooms.get(roomId);
-        room.elements = room.elements.filter(el => el.id !== elementId);
+        room.elements = room.elements.filter((el: any) => el.id !== elementId);
         markRoomDirty(roomId);
         socket.to(roomId).emit('element-remove', elementId);
       }
     });
 
-    socket.on('element-update', (element) => {
+    socket.on('element-update', (element: any) => {
       const roomId = socketToRoom.get(socket.id);
       if (roomId && rooms.has(roomId)) {
         const room = rooms.get(roomId);
-        const idx = room.elements.findIndex(el => el.id === element.id);
+        const idx = room.elements.findIndex((el: any) => el.id === element.id);
         if (idx !== -1) room.elements[idx] = element;
         markRoomDirty(roomId);
         socket.to(roomId).emit('element-update', element);
@@ -149,18 +153,18 @@ app.prepare().then(async () => {
       }
     });
 
-    socket.on('cursor-move', (cursor) => {
+    socket.on('cursor-move', (cursor: any) => {
       const roomId = socketToRoom.get(socket.id);
       if (roomId) {
         socket.to(roomId).emit('cursor-move', { userId: socket.id, cursor });
       }
     });
 
-    socket.on('chat-message', (msg) => {
+    socket.on('chat-message', (msg: any) => {
       const roomId = socketToRoom.get(socket.id);
       if (roomId && rooms.has(roomId)) {
         rooms.get(roomId).chat.push(msg);
-        markRoomDirty(roomId);
+        markRoomDirty(roomId); // Note: we only save elements to DB right now, but we'll mark dirty anyway
         socket.to(roomId).emit('chat-message', msg);
       }
     });

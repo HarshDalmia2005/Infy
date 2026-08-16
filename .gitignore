@@ -41,3 +41,8 @@ yarn-error.log*
 next-env.d.ts
 
 .vscode
+/src/generated/prisma
+
+# docker postgres volume
+pgdata/
+.boards/

@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react';
 import { Download, Upload, Image as ImageIcon, FileJson, FileCode2, ChevronDown } from 'lucide-react';
 import { useBoardStore } from '../stores/boardStore';
-import { historyManager, AddElementCommand, ClearAllCommand } from '../engine/HistoryManager';
+import { historyManager, AddElementCommand } from '../engine/HistoryManager';
 import { CanvasElement } from '../engine/types';
 
 export default function ExportMenu() {
@@ -30,12 +30,14 @@ export default function ExportMenu() {
     ctx.drawImage(canvas, 0, 0);
 
     const dataUrl = tempCanvas.toDataURL('image/png');
+    // eslint-disable-next-line react-hooks/purity
     downloadFile(dataUrl, `infyboard-${Date.now()}.png`);
     setIsOpen(false);
   };
 
   const handleExportJSON = () => {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(elements, null, 2));
+    // eslint-disable-next-line react-hooks/purity
     downloadFile(dataStr, `infyboard-${Date.now()}.json`);
     setIsOpen(false);
   };
@@ -94,6 +96,7 @@ export default function ExportMenu() {
 
     svgContent += `</svg>`;
     const dataStr = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgContent);
+    // eslint-disable-next-line react-hooks/purity
     downloadFile(dataStr, `infyboard-${Date.now()}.svg`);
     setIsOpen(false);
   };
@@ -112,7 +115,7 @@ export default function ExportMenu() {
             historyManager.execute(new AddElementCommand(el));
           });
         }
-      } catch (err) {
+      } catch {
         console.error("Invalid JSON file");
       }
     };
