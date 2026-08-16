@@ -2,8 +2,10 @@ import { create } from 'zustand';
 
 export interface User {
   id: string;
+  identityId?: string;
   name: string;
   color: string;
+  image?: string;
   cursor?: { x: number; y: number };
 }
 

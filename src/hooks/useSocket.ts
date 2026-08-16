@@ -4,8 +4,10 @@ import { SOCKET_EVENTS } from '../socket/events';
 import { useBoardStore } from '../stores/boardStore';
 import { useUserStore, User } from '../stores/userStore';
 import { CanvasElement } from '../engine/types';
+import { useSession } from 'next-auth/react';
 
 export function useSocket(roomId: string) {
+  const { data: session, status } = useSession();
   // Use refs to avoid stale closures and prevent effect from re-running
   const roomIdRef = useRef(roomId);
 
@@ -14,6 +16,8 @@ export function useSocket(roomId: string) {
   }, [roomId]);
 
   useEffect(() => {
+    if (status === 'loading') return;
+
     const socket = getSocket();
 
     const handleRoomState = (state: { elements: CanvasElement[]; users: Record<string, User>; chat: unknown[]; me: User }) => {
@@ -49,23 +53,41 @@ export function useSocket(roomId: string) {
     const joinRoom = () => {
       console.log('[socket] connected, joining room', roomIdRef.current);
 
-      let profile = null;
+      let profile: any = null;
       try {
-        const saved = localStorage.getItem('infy-user-profile');
-        if (saved) profile = JSON.parse(saved);
+        if (session?.user) {
+          profile = {
+            identityId: session.user.id || session.user.email,
+            name: session.user.name,
+            image: session.user.image,
+          };
+        } else {
+          const saved = localStorage.getItem('infy-user-profile');
+          if (saved) profile = JSON.parse(saved);
+          if (!profile?.identityId) {
+            profile = { ...profile, identityId: Math.random().toString(36).substring(7) };
+          }
+        }
+        
+        // Save the profile so anonymous users keep their identity across refreshes
+        if (profile) {
+          localStorage.setItem('infy-user-profile', JSON.stringify({
+            identityId: profile.identityId,
+            name: profile.name,
+            color: profile.color
+          }));
+        }
       } catch { /* ignore */ }
 
       socket.emit(SOCKET_EVENTS.JOIN_ROOM, roomIdRef.current, profile);
     };
 
     if (socket.connected) {
-      // Already connected (e.g. hot reload)
       joinRoom();
     } else {
       socket.once('connect', joinRoom);
+      socket.connect();
     }
-
-    socket.connect();
 
     return () => {
       socket.off('connect', joinRoom);
@@ -79,5 +101,5 @@ export function useSocket(roomId: string) {
       socket.off(SOCKET_EVENTS.CURSOR_MOVE, handleCursorMove);
       socket.disconnect();
     };
-  }, []); // Empty deps — runs once, uses refs for roomId
+  }, [roomId, session, status]);
 }

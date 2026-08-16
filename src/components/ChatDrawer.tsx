@@ -60,7 +60,7 @@ export default function ChatDrawer() {
 
     const msg: ChatMessage = {
       id: Math.random().toString(36).substring(7),
-      userId: me.id,
+      userId: me.identityId || me.id,
       name: me.name,
       color: me.color,
       text: inputText.trim(),
@@ -102,7 +102,7 @@ export default function ChatDrawer() {
             <div className="m-auto text-center text-white/30 text-sm">No messages yet.<br/>Say hello to your team!</div>
           ) : (
             messages.map((msg, i) => {
-              const isMe = msg.userId === me?.id;
+              const isMe = msg.userId === (me?.identityId || me?.id);
               const showName = i === 0 || messages[i - 1].userId !== msg.userId;
               
               return (

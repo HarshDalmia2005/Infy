@@ -98,8 +98,10 @@ app.prepare().then(async () => {
 
       const user = {
         id: socket.id,
+        identityId: profile?.identityId,
         name: profile?.name || `${COLORS[Math.floor(Math.random() * COLORS.length)]} ${ANIMALS[Math.floor(Math.random() * ANIMALS.length)]}`,
         color: profile?.color || COLORS[Math.floor(Math.random() * COLORS.length)],
+        image: profile?.image,
       };
 
       room.users[socket.id] = user;
